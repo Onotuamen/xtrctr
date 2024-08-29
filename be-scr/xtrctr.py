@@ -8,15 +8,19 @@ from selenium.common.exceptions import TimeoutException, ElementNotInteractableE
 import time
 import sys
 
-def get_player_data(player_name, max_retries=3):
+def get_player_data(player_name, max_retries=3, timeout=60):
     chrome_options = Options()
-    # chrome_options.add_argument("--headless")  # Commenting out headless mode
+    chrome_options.add_argument("--headless")  # Run in headless mode
     
     for attempt in range(max_retries):
         driver = webdriver.Chrome(options=chrome_options)
         try:
-            driver.get("https://www.besoccer.com/")
             print(f"Attempt {attempt + 1} of {max_retries}")
+            driver.set_page_load_timeout(timeout)
+            
+            start_time = time.time()
+            driver.get("https://www.besoccer.com/")
+            print(f"Loaded homepage in {time.time() - start_time:.2f} seconds")
             
             try:
                 accept_button = WebDriverWait(driver, 10).until(
@@ -82,25 +86,30 @@ def get_player_data(player_name, max_retries=3):
             
             # Find and click on the "Career" link
             try:
+                start_time = time.time()
                 career_link = WebDriverWait(driver, 10).until(
                     EC.element_to_be_clickable((By.XPATH, "//nav[@class='head-menu']//a[contains(text(), 'Career')]"))
                 )
                 career_link.click()
-                print("Clicked on Career link")
+                print(f"Clicked Career link after {time.time() - start_time:.2f} seconds")
                 
-                # Wait for the career page to load
+                # Add a short wait
+                time.sleep(5)
+                
+                start_time = time.time()
                 WebDriverWait(driver, 10).until(EC.url_contains("/career-path/"))
-                print("Career page loaded")
+                print(f"Career page loaded in {time.time() - start_time:.2f} seconds")
                 
                 # Get the current URL (career page URL)
                 career_url = driver.current_url
                 print(f"Career page URL: {career_url}")
                 
-                # Here you can add code to extract information from the career page
-                # For example:
-                # career_data = extract_career_data(driver)
+                # Extract career data
+                start_time = time.time()
+                career_data = extract_career_data(driver)
+                print(f"Extracted career data in {time.time() - start_time:.2f} seconds")
                 
-                return career_url
+                return career_url, career_data
             except (TimeoutException, NoSuchElementException) as e:
                 print(f"Error clicking on Career link: {str(e)}")
                 return player_url
@@ -120,6 +129,24 @@ def get_player_data(player_name, max_retries=3):
     
     return "Failed to fetch player data after multiple attempts"
 
+def extract_career_data(driver):
+    try:
+        general_container = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "div#general.container"))
+        )
+        print("General container found")
+        print("General container HTML:")
+        print(general_container.get_attribute('outerHTML')[:1000])  # Print first 1000 characters
+
+        # Print the entire page source
+        print("Full page source:")
+        print(driver.page_source[:5000])  # Print first 5000 characters
+
+    except Exception as e:
+        print(f"Error extracting career data: {str(e)}")
+
+    return {}
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         player_name = " ".join(sys.argv[1:])
@@ -127,7 +154,16 @@ if __name__ == "__main__":
         player_name = input("Enter player name: ").strip()
     
     if player_name:
-        player_url = get_player_data(player_name)
-        print(f"Final result: {player_url}")
+        result = get_player_data(player_name)
+        if isinstance(result, tuple):
+            career_url, career_data = result
+            print(f"Final result: {career_url}")
+            print("Career data:")
+            for tab, data in career_data.items():
+                print(f"\n{tab}:")
+                for key, value in data.items():
+                    print(f"  {key}: {value}")
+        else:
+            print(f"Final result: {result}")
     else:
         print("Error: Player name cannot be empty.")
